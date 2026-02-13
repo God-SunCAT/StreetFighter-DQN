@@ -52,7 +52,8 @@ def env_worker(worker_id, num_workers):
                 # 等待处理返回
                 if replay_buffer.get_caculate_state() != 2:
                     # 设置为无任务状态
-                    action = replay_buffer.get_caculate_state()
+                    action = int(replay_buffer.get_caculate_state()) - 3 # 3是偏移量
+                    
                     replay_buffer.get_caculate_state(value=False)[()] = 0
                     break
         else:

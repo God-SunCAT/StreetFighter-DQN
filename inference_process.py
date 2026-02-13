@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from network import LearningNet
 from replay_buffer import SharedReplayBuffer
 
@@ -16,14 +17,6 @@ def inference_worker(num_workers):
     ]
 
     while True:
-        # 串行推理太慢了
-        # for buffer in replay_buffers:
-        #     if buffer.get_caculate_state() == 1:
-        #         state = torch.tensor(buffer.get_caculate_buffer()).to(device, dtype=torch.float32).div_(255.0).unsqueeze(0)
-                
-        #         with torch.no_grad():
-        #             buffer.get_caculate_state(value=False)[()] = torch.argmax(net(state), dim=-1)[0]
-
         # 并行推理
         # 1. 收集阶段
         active_indices = []
@@ -31,6 +24,10 @@ def inference_worker(num_workers):
 
         for i, buffer in enumerate(replay_buffers):
             if buffer.get_caculate_state() == 1:
+                if np.random.rand() < 0.3:
+                    buffer.get_caculate_state(value=False)[()] = np.random.randint(0, 11) + 3
+                    continue
+
                 # 预处理 state
                 s = torch.tensor(buffer.get_caculate_buffer(), device=device, dtype=torch.float32).div_(255.0)
                 # s 的形状应当是 (4, 84, 84)
@@ -50,7 +47,7 @@ def inference_worker(num_workers):
             # 3. 结果分发阶段
             for idx, action in zip(active_indices, actions):
                 # action 是一个零维标量 tensor，使用 .item() 存入 buffer
-                replay_buffers[idx].get_caculate_state(value=False)[()] = action.item()
+                replay_buffers[idx].get_caculate_state(value=False)[()] = action.item() + 3
             
         
     
