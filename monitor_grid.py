@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 
 def get_grid_final_shape(num_workers, img_shape=(200, 256), rows=2, cols=2, label_h=30, border=2):
     """
