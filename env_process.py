@@ -44,16 +44,20 @@ def env_worker(worker_id, num_workers):
     state = deque(maxlen=4)
     old_state = None # (state, action, reward)
     stable_count = 0
+    repeat_action = 0
+    repeat_count = 0
+    it_count = 0
+    total_reward = 0
     while True:
         if len(state) >= 4:
             replay_buffer.get_caculate_buffer()[:] = state
+            # 1号为要求处理, 其他为处理完毕
             replay_buffer.get_caculate_state(value=False)[()] = 1
             while True:
                 # 等待处理返回
-                if replay_buffer.get_caculate_state() != 2:
-                    # 设置为无任务状态
+                if replay_buffer.get_caculate_state() != 1:
                     action = int(replay_buffer.get_caculate_state()) - 3 # 3是偏移量
-                    
+                    # 设置为无任务状态
                     replay_buffer.get_caculate_state(value=False)[()] = 0
                     break
         else:
@@ -66,15 +70,18 @@ def env_worker(worker_id, num_workers):
         # reward单次要在 0~1 范围内, 以防 Q爆炸
         reward = 0
 
-        # 攻击动作加分
-        if action >= 9 and action <= 17:
-            reward += 0.1
+        # 重复动作惩罚
+        if action == repeat_action:
+            repeat_count += 1
+        else:
+            repeat_count = 0
+        reward += - repeat_count * 0.06
 
-        # 血量差加分
+        # 血量差加分 双方满血都是 176
         reward += (info['health'] - info['enemy_health']) / 176 * 0.1
         
         # reward
-
+        total_reward += reward
         # display
         if np.array_equal(latest_obs[worker_id], next_frame):
             stable_count += 1
@@ -116,7 +123,10 @@ def env_worker(worker_id, num_workers):
         
         if done or stable_count >= 30:
             # 30次不动是最合适的参数, 自动跳失败和通关
+            it_count += 1
+            total_reward = 0
             obs, info = env.reset()
+
 
     shm_latest_obs.close()
     shm_tmp_int64.close()

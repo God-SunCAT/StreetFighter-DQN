@@ -111,14 +111,14 @@ def train_worker(num_workers):
             print(f'迭代次数: {it_count} | 推理迁移次数: {trans_count['infer']} | 目标迁移次数: {trans_count['target']} | 探索概率: {episilon[()].item():.3f}')
             
         if it_count % 3000 == 0:
-            torch.save(net.state_dict(), f'./checkpoints/model_{it_count}it.pkl')
+            torch.save(net.state_dict(), f'./checkpoints/model_{it_count}it.pt')
             print(f'<权重已保存>迭代次数: {it_count} | 推理迁移次数: {trans_count['infer']} | 目标迁移次数: {trans_count['target']} | 探索概率: {episilon[()].item():.3f}')
                 
         if it_count % 100 == 0:
             print(f'迭代次数: {it_count} | 推理迁移次数: {trans_count['infer']} | 目标迁移次数: {trans_count['target']} | 探索概率: {episilon[()].item():.3f}')
                 
         if os.path.exists('./STOP'):
-            torch.save(net.state_dict(), f'./checkpoints/model_{it_count}it.pkl')
+            torch.save(net.state_dict(), f'./checkpoints/model_{it_count}it.pt')
             print(f'<权重已保存>迭代次数: {it_count} | 推理迁移次数: {trans_count['infer']} | 目标迁移次数: {trans_count['target']} | 探索概率: {episilon[()].item():.3f}')
             print(f'<训练中止>')
             break

@@ -22,7 +22,8 @@ env = stable_retro.make(
 env = SF2Discrete12(env)
 
 # 模型配置
-weights = 'checkpoints/model_3000it.pkl'
+weights = 'inference_weights.pt'
+# weights = 'checkpoints/model_45000it.pkl'
 net = LearningNet()
 net.load_state_dict(torch.load(weights))
 net.to('cuda')
@@ -33,22 +34,37 @@ state = deque(maxlen=4)
 total_reward = 0
 done = False
 while not done:
-    if len(state) >= 4:
-        data = np.stack(list(state), axis=0)
-        data = torch.tensor(data)
-        data = data.unsqueeze(0) / 255
-        data = data.float()
-        data = data.to('cuda')
-        result = net(data)
-        action = int(torch.argmax(result, dim=-1)[0])
-        print(action)
-    else:
-        # 最初的几步直接无动作
-        action = 0
-
+    # if len(state) >= 4:
+    #     data = np.stack(list(state), axis=0)
+    #     data = torch.tensor(data)
+    #     data = data.unsqueeze(0) / 255
+    #     data = data.float()
+    #     data = data.to('cuda')
+    #     result = net(data)
+    #     action = int(torch.argmax(result, dim=-1)[0])
+    #     print(action)
+    # else:
+    #     # 最初的几步直接无动作
+    #     action = 0
+    # action = env.action_space.sample()
+    action = int(np.random.randint(0, 11))
+    print(action)
     next_frame, game_reward, terminated, truncated, info = env.step(action)
     done = terminated or truncated
-    total_reward += game_reward
+    
+    # REWARD
+
+    reward = 0
+    # 攻击动作加分
+    if action >= 9 and action <= 17:
+        reward += 0.05
+
+    # 血量差加分 双方满血都是 176
+    reward += (info['health'] - info['enemy_health']) / 176 * 0.1
+    
+    # REWARD
+    
+    total_reward += reward
     
     # 压入状态
     gray_frame = cv2.cvtColor(next_frame, cv2.COLOR_BGR2GRAY)

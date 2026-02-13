@@ -37,8 +37,9 @@ def inference_worker(num_workers):
 
         for i, buffer in enumerate(replay_buffers):
             if buffer.get_caculate_state() == 1:
-                if np.random.rand() < episilon[()].item() or episilon[()].item() == 0:
-                    buffer.get_caculate_state(value=False)[()] = np.random.randint(0, 11) + 3
+                if np.random.rand() < episilon[()].item():
+                    action = int(np.random.randint(0, 17))
+                    buffer.get_caculate_state(value=False)[()] = action + 3
                     continue
 
                 # 预处理 state

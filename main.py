@@ -86,7 +86,14 @@ if __name__ == "__main__":
         shm_episilon.close()
         shm_episilon.unlink()
         shm_episilon = shared_memory.SharedMemory(create=True, size=8, name="rl_episilon")
+    
+    episilon = np.ndarray(
+        (),
+        dtype=np.float64,
+        buffer=shm_episilon.buf
+    )
 
+    episilon[()] = 1
     # 启动推理线程
     inference_process = mp.Process(target=inference_worker, args=(NUM_WORKERS,))
     inference_process.start()
