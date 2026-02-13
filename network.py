@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LearningNet(nn.Module):
-    def __init__(self, input_channels=4, action_size=12):
+    def __init__(self, input_channels=4, action_size=18):
         super().__init__()
         
         # 4*84*84

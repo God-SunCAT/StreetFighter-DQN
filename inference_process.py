@@ -1,11 +1,24 @@
 import torch
 import numpy as np
+from multiprocessing import shared_memory
+
 from network import LearningNet
 from replay_buffer import SharedReplayBuffer
 
 def inference_worker(num_workers):
+    # 这里其实没必要兼容 cpu, cuda 跑不了的话, 按照 cpu 的速度来说, 也没有跑的必要了
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     net = LearningNet().to(device)
+    for p in net.parameters():
+        p.requires_grad_(False)
+
+    shm_inference_net_version = shared_memory.SharedMemory(name="inference_net_version")
+    inference_net_version = np.ndarray((), dtype=np.int64, buffer=shm_inference_net_version.buf)
+
+    shm_episilon = shared_memory.SharedMemory(name="rl_episilon")
+    episilon = np.ndarray((), dtype=np.float64, buffer=shm_episilon.buf)
+
     replay_buffers = [
         SharedReplayBuffer(
             capacity=5000,
@@ -15,7 +28,7 @@ def inference_worker(num_workers):
         )
         for i in range(num_workers)
     ]
-
+    current_vesion = 0
     while True:
         # 并行推理
         # 1. 收集阶段
@@ -24,7 +37,7 @@ def inference_worker(num_workers):
 
         for i, buffer in enumerate(replay_buffers):
             if buffer.get_caculate_state() == 1:
-                if np.random.rand() < 0.3:
+                if np.random.rand() < episilon[()].item() or episilon[()].item() == 0:
                     buffer.get_caculate_state(value=False)[()] = np.random.randint(0, 11) + 3
                     continue
 
@@ -39,6 +52,14 @@ def inference_worker(num_workers):
             # 将 list 中的 tensor 堆叠为 (Batch, 4, 84, 84)
             batch_tensor = torch.stack(states_to_infer)
             
+            # 检测版本
+            if inference_net_version[()].item() != current_vesion:
+                state_dict = torch.load(
+                    "inference_weights.pt",
+                    map_location="cpu"   # 关键
+                )
+                current_vesion = inference_net_version[()].item()
+                
             with torch.no_grad():
                 # 一次性推整个 Batch
                 outputs = net(batch_tensor)  # 输出形状: (Batch, action_size)
@@ -48,6 +69,9 @@ def inference_worker(num_workers):
             for idx, action in zip(active_indices, actions):
                 # action 是一个零维标量 tensor，使用 .item() 存入 buffer
                 replay_buffers[idx].get_caculate_state(value=False)[()] = action.item() + 3
+
+    shm_inference_net_version.close()
+    shm_episilon.close()
             
         
     

@@ -62,7 +62,19 @@ def env_worker(worker_id, num_workers):
             
         next_frame, game_reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
-        reward = game_reward
+
+        # reward单次要在 0~1 范围内, 以防 Q爆炸
+        reward = 0
+
+        # 攻击动作加分
+        if action >= 9 and action <= 17:
+            reward += 0.1
+
+        # 血量差加分
+        reward += (info['health'] - info['enemy_health']) / 176 * 0.1
+        
+        # reward
+
         # display
         if np.array_equal(latest_obs[worker_id], next_frame):
             stable_count += 1

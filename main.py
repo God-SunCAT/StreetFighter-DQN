@@ -10,6 +10,7 @@ from inference_process import inference_worker
 
 from replay_buffer import SharedReplayBuffer
 from monitor_grid import *
+from network import LearningNet
 
 runing = True
 
@@ -67,6 +68,25 @@ if __name__ == "__main__":
     cv2.namedWindow(win_name, cv2.WINDOW_GUI_NORMAL)
     cv2.resizeWindow(win_name, int(win_shape[0] * scaling), int(win_shape[1] * scaling))
 
+    # 推理用网络(目标网络 -> 仅支持GPU) -> GPU天生支持共享权重
+    # 8byte -> np.int64
+    try:
+        shm_inference_net_version = shared_memory.SharedMemory(create=True, size=8, name="inference_net_version")
+    except FileExistsError:
+        shm_inference_net_version = shared_memory.SharedMemory(name="inference_net_version")
+        shm_inference_net_version.close()
+        shm_inference_net_version.unlink()
+        shm_inference_net_version = shared_memory.SharedMemory(create=True, size=8, name="inference_net_version")
+
+    # 8byte -> float64
+    try:
+        shm_episilon = shared_memory.SharedMemory(create=True, size=8, name="rl_episilon")
+    except FileExistsError:
+        shm_episilon = shared_memory.SharedMemory(name="rl_episilon")
+        shm_episilon.close()
+        shm_episilon.unlink()
+        shm_episilon = shared_memory.SharedMemory(create=True, size=8, name="rl_episilon")
+
     # 启动推理线程
     inference_process = mp.Process(target=inference_worker, args=(NUM_WORKERS,))
     inference_process.start()
@@ -109,6 +129,12 @@ if __name__ == "__main__":
 
     shm_tmp_int64.close()
     shm_tmp_int64.unlink()
+
+    shm_inference_net_version.close()
+    shm_inference_net_version.unlink()
+
+    shm_episilon.close()
+    shm_episilon.unlink()
 
     for buffer in replay_buffers:
         buffer.close()

@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from multiprocessing import shared_memory
 
 class SharedReplayBuffer:
@@ -94,3 +95,34 @@ class SharedReplayBuffer:
     def unlink(self):
         for shm in self.shms.values():
             shm.unlink()
+
+def sample_and_merge(buffer_list, batch_size_per_buffer, device):
+    obs_list, act_list, rew_list, next_obs_list, done_list = [], [], [], [], []
+
+    # 1. 遍历 list，每个对象采样出一小块 NumPy 数组
+    for buf in buffer_list:
+        o, a, r, no, d = buf.sample(batch_size_per_buffer)
+        obs_list.append(o)
+        act_list.append(a)
+        rew_list.append(r)
+        next_obs_list.append(no)
+        done_list.append(d)
+
+    # 2. 在 CPU 上进行 NumPy 拼接 (非常快)
+    # np.concatenate 比 torch.cat 在处理大量小数组时更丝滑
+    all_obs = np.concatenate(obs_list, axis=0)
+    all_act = np.concatenate(act_list, axis=0)
+    all_rew = np.concatenate(rew_list, axis=0)
+    all_next_obs = np.concatenate(next_obs_list, axis=0)
+    all_done = np.concatenate(done_list, axis=0)
+
+    # 3. 一次性转为 Tensor 并推送到 GPU
+    # 使用 torch.as_tensor 或 from_numpy 避免不必要的内存拷贝
+    # 然后再调用 .to(device, non_blocking=True) 开启异步传输
+    batch_obs = torch.as_tensor(all_obs, device=device, dtype=torch.float32)
+    batch_act = torch.as_tensor(all_act, device=device, dtype=torch.int64)
+    batch_rew = torch.as_tensor(all_rew, device=device, dtype=torch.float32)
+    batch_next_obs = torch.as_tensor(all_next_obs, device=device, dtype=torch.float32)
+    batch_done = torch.as_tensor(all_done, device=device, dtype=torch.bool)
+
+    return batch_obs, batch_act, batch_rew, batch_next_obs, batch_done
