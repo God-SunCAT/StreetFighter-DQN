@@ -28,7 +28,7 @@ def env_worker(worker_id, num_workers):
     )
     # ReplayBuffer
     replay_buffer = SharedReplayBuffer(
-        capacity=50000,
+        capacity=5000,
         obs_shape=(4, 84, 84),
         name_prefix=f'rl_buffer_worker_{worker_id}',
         create=False

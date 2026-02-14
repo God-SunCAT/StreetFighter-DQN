@@ -23,7 +23,7 @@ def train_worker(num_workers):
 
     replay_buffers = [
         SharedReplayBuffer(
-            capacity=50000,
+            capacity=5000,
             obs_shape=(4, 84, 84),
             name_prefix=f'rl_buffer_worker_{i}',
             create=False
