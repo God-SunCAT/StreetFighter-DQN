@@ -16,6 +16,11 @@ class SharedReplayBuffer:
             'dones': {'shape': (capacity,), 'dtype': np.bool_},
             'cursor': {'shape': (), 'dtype': np.int64},
 
+            # 统计该 Worker 的数据 -> 直接读字典, 没必要包装了
+            'statistic_time': {'shape': (), 'dtype': np.float64},
+            'statistic_reward': {'shape': (), 'dtype': np.float64},
+            'statistic_count': {'shape': (), 'dtype': np.int64},
+
             'caculate_state': {'shape': (), 'dtype': np.uint8}, # 0 无计算任务 | 1 需要计算 | 2 计算完成
             'caculate_buffer': {'shape': obs_shape, 'dtype': np.uint8},
 

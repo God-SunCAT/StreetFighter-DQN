@@ -21,7 +21,7 @@ def inference_worker(num_workers):
 
     replay_buffers = [
         SharedReplayBuffer(
-            capacity=5000,
+            capacity=100000,
             obs_shape=(4, 84, 84),
             name_prefix=f'rl_buffer_worker_{i}',
             create=False
@@ -43,7 +43,7 @@ def inference_worker(num_workers):
                     continue
 
                 # 预处理 state
-                s = torch.tensor(buffer.get_caculate_buffer(), device=device, dtype=torch.float32).div_(255.0)
+                s = torch.tensor(buffer.get_caculate_buffer(), device=device, dtype=torch.float32)
                 # s 的形状应当是 (4, 84, 84)
                 states_to_infer.append(s)
                 active_indices.append(i)

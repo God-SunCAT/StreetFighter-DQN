@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 import torch.nn.functional as F
 
 class LearningNet(nn.Module):
@@ -16,9 +17,22 @@ class LearningNet(nn.Module):
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, action_size)
 
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                # 对权重使用 Xavier Uniform
+                init.xavier_uniform_(m.weight)
+                # 如果有偏置，初始化为 0
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+
     def forward(self, x):
         # (batch, input_channels, 84, 84)
         # -> (batch, action)
+        x = x / 255
+
         x = self.conv1(x)
         x = F.relu(x)
 

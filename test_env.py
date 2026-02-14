@@ -23,44 +23,39 @@ env = SF2Discrete12(env)
 
 # 模型配置
 weights = 'inference_weights.pt'
-# weights = 'checkpoints/model_45000it.pkl'
+weights = 'checkpoints/model_6000it.pt'
 net = LearningNet()
 net.load_state_dict(torch.load(weights))
 net.to('cuda')
 
 # 环境操作
 next_frame, info = env.reset()
+current_health = info.get('health', 176)
+current_enemy_health = info.get('enemy_health', 176)
 state = deque(maxlen=4)
 total_reward = 0
+repeat_action = 0
+repeat_count = 0
 done = False
 while not done:
-    # if len(state) >= 4:
-    #     data = np.stack(list(state), axis=0)
-    #     data = torch.tensor(data)
-    #     data = data.unsqueeze(0) / 255
-    #     data = data.float()
-    #     data = data.to('cuda')
-    #     result = net(data)
-    #     action = int(torch.argmax(result, dim=-1)[0])
-    #     print(action)
-    # else:
-    #     # 最初的几步直接无动作
-    #     action = 0
-    # action = env.action_space.sample()
-    action = int(np.random.randint(0, 11))
-    print(action)
+    if len(state) >= 4:
+        data = np.stack(list(state), axis=0)
+        data = torch.tensor(data)
+        data = data.unsqueeze(0)
+        data = data.float()
+        data = data.to('cuda')
+        result = net(data)
+        action = int(torch.argmax(result, dim=-1)[0])
+        print(action)
+    else:
+        # 最初的几步直接无动作
+        action = 0
     next_frame, game_reward, terminated, truncated, info = env.step(action)
     done = terminated or truncated
     
     # REWARD
-
+    
     reward = 0
-    # 攻击动作加分
-    if action >= 9 and action <= 17:
-        reward += 0.05
-
-    # 血量差加分 双方满血都是 176
-    reward += (info['health'] - info['enemy_health']) / 176 * 0.1
     
     # REWARD
     

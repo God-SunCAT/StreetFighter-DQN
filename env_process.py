@@ -1,5 +1,7 @@
+import time
 import stable_retro
 import cv2
+import math
 import numpy as np
 from collections import deque
 
@@ -7,6 +9,7 @@ from multiprocessing import shared_memory
 
 from replay_buffer import SharedReplayBuffer
 from action_wrapper import SF2Discrete12
+
 
 def env_worker(worker_id, num_workers):
     # 显示配置
@@ -25,7 +28,7 @@ def env_worker(worker_id, num_workers):
     )
     # ReplayBuffer
     replay_buffer = SharedReplayBuffer(
-        capacity=5000,
+        capacity=100000,
         obs_shape=(4, 84, 84),
         name_prefix=f'rl_buffer_worker_{worker_id}',
         create=False
@@ -41,13 +44,22 @@ def env_worker(worker_id, num_workers):
 
     # 环境操作
     next_frame, info = env.reset()
+
+    # ---- REWARD ----
+
+    full_hp = 176
+    reward_coeff = 3.0
+    current_health = info.get('health', full_hp)
+    current_enemy_health = info.get('enemy_health', full_hp)
+
+    # ---- REWARD ----
+
     state = deque(maxlen=4)
     old_state = None # (state, action, reward)
     stable_count = 0
-    repeat_action = 0
-    repeat_count = 0
-    it_count = 0
     total_reward = 0
+
+    time_stamp = time.time()
     while True:
         if len(state) >= 4:
             replay_buffer.get_caculate_buffer()[:] = state
@@ -66,22 +78,40 @@ def env_worker(worker_id, num_workers):
             
         next_frame, game_reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
-
-        # reward单次要在 0~1 范围内, 以防 Q爆炸
-        reward = 0
-
-        # 重复动作惩罚
-        if action == repeat_action:
-            repeat_count += 1
-        else:
-            repeat_count = 0
-        reward += - repeat_count * 0.06
-
-        # 血量差加分 双方满血都是 176
-        reward += (info['health'] - info['enemy_health']) / 176 * 0.1
         
-        # reward
+        # ================
+        # ---- REWARD ----
+        # ================
+
+        reward = 0
+        obs_enemy_hp = info.get('enemy_health', 0)
+        obs_player_hp = info.get('health', 0)
+
+        # 1. 战败惩罚：根据对手剩余血量计算指数级惩罚
+        if obs_player_hp <= 0:
+            reward = -math.pow(full_hp, (obs_enemy_hp + 1) / (full_hp + 1))
+        
+        # 2. 胜利奖励：根据自己剩余血量计算指数级奖励，并乘以进攻系数
+        elif obs_enemy_hp <= 0:
+            reward = math.pow(full_hp, (obs_player_hp + 1) / (full_hp + 1)) * reward_coeff
+        
+        # 3. 战斗中：根据双方血量变化计算即时奖励（进攻权重为3）
+        else:
+            reward = reward_coeff * (current_enemy_health - obs_enemy_hp) - (current_health - obs_player_hp)
+        
+        # 更新记录值供下一帧对比
+        current_health = obs_player_hp
+        current_enemy_health = obs_enemy_hp
+
+        # 4. 奖励归一化：将奖励缩放到神经网络易于处理的范围
+        reward = reward * 0.001
+
+        # ================
+        # ---- REWARD ----
+        # ================
+
         total_reward += reward
+
         # display
         if np.array_equal(latest_obs[worker_id], next_frame):
             stable_count += 1
@@ -123,10 +153,22 @@ def env_worker(worker_id, num_workers):
         
         if done or stable_count >= 30:
             # 30次不动是最合适的参数, 自动跳失败和通关
-            it_count += 1
-            total_reward = 0
-            obs, info = env.reset()
+            
+            replay_buffer.data['statistic_time'][()] += time.time() - time_stamp
+            replay_buffer.data['statistic_reward'][()] += total_reward
+            replay_buffer.data['statistic_count'][()] += 1
+            time_stamp = time.time()
 
+            obs, info = env.reset()
+            
+            total_reward = 0
+
+            # ---- REWARD ----
+            
+            current_health = info.get('health', full_hp)
+            current_enemy_health = info.get('enemy_health', full_hp)
+
+            # ---- REWARD ----
 
     shm_latest_obs.close()
     shm_tmp_int64.close()
