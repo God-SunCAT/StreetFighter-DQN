@@ -112,7 +112,7 @@ def train_worker(num_workers):
             total_reward += buffer.data['statistic_reward'][()].item()
             total_cnt += buffer.data['statistic_count'][()].item()
 
-        if total_cnt >= 20:
+        if total_cnt >= 100:
             for buffer in replay_buffers:
                 buffer.data['statistic_time'][()] = 0
                 buffer.data['statistic_reward'][()] = 0

@@ -23,7 +23,7 @@ env = SF2Discrete12(env)
 
 # 模型配置
 weights = 'inference_weights.pt'
-weights = 'checkpoints/model_6000it.pt'
+# weights = 'checkpoints/model_6000it.pt'
 net = LearningNet()
 net.load_state_dict(torch.load(weights))
 net.to('cuda')
