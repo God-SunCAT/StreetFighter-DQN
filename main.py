@@ -126,7 +126,7 @@ if __name__ == "__main__":
         cv2.waitKey(1)
 
         if counter % 1000 == 0:
-                print(f'累计 {tmp_int64 / 1024 / 1024 / 1024} Gb')
+                print(f'累计 {tmp_int64 / 1024 / 1024 / 1024:.3f} Gb')
                 time_stamp = time.time()
 
         counter += 1

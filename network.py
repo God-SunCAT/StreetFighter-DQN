@@ -4,7 +4,7 @@ import torch.nn.init as init
 import torch.nn.functional as F
 
 class LearningNet(nn.Module):
-    def __init__(self, input_channels=4, action_size=18):
+    def __init__(self, input_channels=4, action_size=15):
         super().__init__()
         
         # 4*84*84
@@ -14,6 +14,7 @@ class LearningNet(nn.Module):
 
         # 4*84*84 -> 64*7*7
         self.fc1 = nn.Linear(64 * 7 * 7, 512)
+        self.fc2 = nn.Linear(512, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, action_size)
 
@@ -22,9 +23,8 @@ class LearningNet(nn.Module):
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-                # 对权重使用 Xavier Uniform
-                init.xavier_uniform_(m.weight)
-                # 如果有偏置，初始化为 0
+                # ReLU用He初始化（也叫Kaiming初始化）
+                init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='relu')
                 if m.bias is not None:
                     init.constant_(m.bias, 0)
 

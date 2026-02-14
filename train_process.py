@@ -45,14 +45,24 @@ def train_worker(num_workers):
     # 注意迁移网络时候需要设状态
     # 允许 net 直接加载文件中的 checkpoint
     net = LearningNet().to(device)
+
+    # 训练后二次启动 加载权重
+    # state_dict = torch.load(
+    #     "inference_weights.pt",
+    #     map_location="cpu"   # 关键
+    # )
+    # net.load_state_dict(state_dict, strict=True)
+
     net_target = copy.deepcopy(net)
     for p in net_target.parameters():
         p.requires_grad_(False)
 
     # 训练参数
     EPS_START = 1.0    # 初始探索概率（全乱走）
-    EPS_END = 0.1     # 最终探索概率（保留一小部分随机性）
+    EPS_END = 0.05     # 最终探索概率（保留一小部分随机性）
     EPS_DECAY = 200000 # 衰减率参数
+
+    # EPS_START = 0.844 # 训练后二次启动
 
     gamma = 0.99
     episilon[()] = 1 # 按迭代次数衰减
@@ -61,7 +71,7 @@ def train_worker(num_workers):
         lr=1e-4,              # 学习率
         betas=(0.9, 0.999),   # 动量参数
         eps=1e-8,             # 防止除以 0 的微小值
-        weight_decay=0.08,    # 权重衰减系数（AdamW 的核心）
+        weight_decay=1e-4,    # 权重衰减系数（AdamW 的核心）
         amsgrad=False         # 是否使用 AMSGrad 变体
     )
 
@@ -70,11 +80,12 @@ def train_worker(num_workers):
     
     # 20 个采集, 选4个缓存池, 每个取 48/4 = 12个
     # 除法结果必须是整数, 这里是整除不代表允许忽略小数
-    batch = 200
+    batch = 280
     select_buffer = 20
     batch_per_buffer = batch // select_buffer
 
     writer = SummaryWriter('runs/train')
+    total_losses = []
     while True:
         # 构建样本
         buffer_list = np.random.choice(20, select_buffer, replace=False)
@@ -94,12 +105,15 @@ def train_worker(num_workers):
 
         target = batch_rew + (~batch_done).float() * gamma * next_q
 
-        loss = F.mse_loss(q, target)
+        # loss = F.mse_loss(q, target)
+        loss = F.smooth_l1_loss(q, target)
 
         optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
         optimizer.step()
 
+        total_losses.append(loss.item())
         episilon[()] = EPS_END + (EPS_START - EPS_END) * \
            math.exp(-1. * it_count / EPS_DECAY)
 
@@ -121,8 +135,11 @@ def train_worker(num_workers):
             writer.add_scalar('Train/time_mean', total_time / total_cnt, it_count)
             writer.add_scalar('Train/reward_mean', total_reward / total_cnt, it_count)
 
-        writer.add_scalar('Train/loss', loss, it_count)
-        writer.add_scalar('Train/epsilon', episilon[()], it_count)
+        if len(total_losses) % 100 == 0:
+            writer.add_scalar('Train/loss', sum(total_losses) / len(total_losses), it_count)
+            writer.add_scalar('Train/epsilon', episilon[()], it_count)
+            total_losses.clear()
+
         # 推理网络迁移
         if it_count % 50 == 0:
             # 我真没招了, 直接掉文件系统做跨进程权重同步吧
@@ -137,7 +154,7 @@ def train_worker(num_workers):
             trans_count['target'] += 1
             print(f'迭代次数: {it_count} | 推理迁移次数: {trans_count['infer']} | 目标迁移次数: {trans_count['target']} | 探索概率: {episilon[()].item():.3f}')
             
-        if it_count % 3000 == 0:
+        if it_count % 1000 == 0:
             torch.save(net.state_dict(), f'./checkpoints/model_{it_count}it.pt')
             print(f'<权重已保存>迭代次数: {it_count} | 推理迁移次数: {trans_count['infer']} | 目标迁移次数: {trans_count['target']} | 探索概率: {episilon[()].item():.3f}')
                 

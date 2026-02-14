@@ -8,7 +8,7 @@ from collections import deque
 from multiprocessing import shared_memory
 
 from replay_buffer import SharedReplayBuffer
-from action_wrapper import SF2Discrete12
+from action_wrapper import SF2Discrete15
 
 
 def env_worker(worker_id, num_workers):
@@ -40,17 +40,16 @@ def env_worker(worker_id, num_workers):
         state="Champion.Level12.RyuVsBison",
         render_mode='rgb_array'
     )
-    env = SF2Discrete12(env)
+    env = SF2Discrete15(env)
 
     # 环境操作
     next_frame, info = env.reset()
 
     # ---- REWARD ----
 
-    full_hp = 176
-    reward_coeff = 3.0
-    current_health = info.get('health', full_hp)
-    current_enemy_health = info.get('enemy_health', full_hp)
+    current_health = 176
+    current_enemy_health = 176
+    round_done = False
 
     # ---- REWARD ----
 
@@ -76,7 +75,7 @@ def env_worker(worker_id, num_workers):
             # 最初的几步直接无动作
             action = 0
             
-        next_frame, game_reward, terminated, truncated, info = env.step(action)
+        next_frame, _, terminated, truncated, info = env.step(action)
         done = terminated or truncated
         
         # ================
@@ -87,24 +86,40 @@ def env_worker(worker_id, num_workers):
         obs_enemy_hp = info.get('enemy_health', 0)
         obs_player_hp = info.get('health', 0)
 
-        # 1. 战败惩罚：根据对手剩余血量计算指数级惩罚
-        if obs_player_hp <= 0:
-            reward = -math.pow(full_hp, (obs_enemy_hp + 1) / (full_hp + 1))
-        
-        # 2. 胜利奖励：根据自己剩余血量计算指数级奖励，并乘以进攻系数
-        elif obs_enemy_hp <= 0:
-            reward = math.pow(full_hp, (obs_player_hp + 1) / (full_hp + 1)) * reward_coeff
-        
-        # 3. 战斗中：根据双方血量变化计算即时奖励（进攻权重为3）
-        else:
-            reward = reward_coeff * (current_enemy_health - obs_enemy_hp) - (current_health - obs_player_hp)
+        delta_enemy_hp = obs_enemy_hp - current_enemy_health
+        delta_player_hp = obs_player_hp - current_health
+
+        if obs_enemy_hp == 176 or obs_player_hp == 176:
+            round_done = False
+
+        if obs_enemy_hp == -1 or obs_player_hp == -1:
+            # -1 代表角色死亡, 防止二次奖励
+            round_done = True
+
+        if not round_done:
+            if action <= 8 and action >= 0:
+                # 中性动作惩罚
+                reward -= 0.06
+            if action <= 14 and action >= 9:
+                # 攻击动作奖励
+                reward += 0.05
+
+            if delta_enemy_hp < 0:
+                # 攻击时敌人血量越少, 奖励越大
+                # print('EnemyDelta', delta_enemy_hp)
+                reward += 12 ** ((176 - obs_enemy_hp) / 176) * 3 + 0.5
+
+            if delta_player_hp < 0:
+                # 受击时候敌人血量越少, 惩罚越大
+                # print('PlayerDelta', delta_player_hp)
+                reward -= 12 ** (((176 - obs_enemy_hp) / 176) - 0.1) + 1
         
         # 更新记录值供下一帧对比
         current_health = obs_player_hp
         current_enemy_health = obs_enemy_hp
 
-        # 4. 奖励归一化：将奖励缩放到神经网络易于处理的范围
-        reward = reward * 0.001
+        # 奖励归一化：将奖励缩放到神经网络易于处理的范围
+        reward = reward * 0.1
 
         # ================
         # ---- REWARD ----
@@ -125,7 +140,7 @@ def env_worker(worker_id, num_workers):
         state.append(gray_frame)
 
         # 压入缓冲区
-        if len(state) >= 4:
+        if len(state) >= 4 and not round_done:
             if old_state is not None:
                 replay_buffer.add(
                     obs=old_state[0],
@@ -136,7 +151,7 @@ def env_worker(worker_id, num_workers):
                 )
 
             # 处理 Done 状态
-            if done:
+            if obs_enemy_hp == 0 or obs_player_hp == 0:
                 tmp_obs = np.stack(list(state), axis=0)
                 replay_buffer.add(
                     obs=tmp_obs,
@@ -147,6 +162,11 @@ def env_worker(worker_id, num_workers):
                 )
             
             old_state = (np.stack(list(state), axis=0), action, reward)
+
+        if round_done:
+            # -1 代表角色死亡, 清空 state 重新开始
+            state.clear()
+            old_state = None
 
         # 数据量统计(只统计得到的画面数据量)
         tmp_int64[()] += gray_frame.nbytes
@@ -165,8 +185,9 @@ def env_worker(worker_id, num_workers):
 
             # ---- REWARD ----
             
-            current_health = info.get('health', full_hp)
-            current_enemy_health = info.get('enemy_health', full_hp)
+            current_health = 176
+            current_enemy_health = 176
+            round_done = False
 
             # ---- REWARD ----
 
