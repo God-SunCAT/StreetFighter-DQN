@@ -59,6 +59,7 @@ def inference_worker(num_workers):
                     "inference_weights.pt",
                     map_location="cpu"   # 关键
                 )
+                net.load_state_dict(state_dict, strict=True)
                 current_vesion = inference_net_version[()].item()
                 
             with torch.no_grad():
