@@ -1,5 +1,6 @@
 import os
 import math
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -22,7 +23,7 @@ def train_worker(num_workers):
 
     replay_buffers = [
         SharedReplayBuffer(
-            capacity=100000,
+            capacity=50000,
             obs_shape=(4, 84, 84),
             name_prefix=f'rl_buffer_worker_{i}',
             create=False
@@ -69,7 +70,7 @@ def train_worker(num_workers):
     
     # 20 个采集, 选4个缓存池, 每个取 48/4 = 12个
     # 除法结果必须是整数, 这里是整除不代表允许忽略小数
-    batch = 600
+    batch = 200
     select_buffer = 20
     batch_per_buffer = batch // select_buffer
 

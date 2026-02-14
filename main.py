@@ -101,7 +101,7 @@ if __name__ == "__main__":
     # 启动训练线程
     replay_buffers = [
         SharedReplayBuffer(
-            capacity=100000,
+            capacity=50000,
             obs_shape=(4, 84, 84),
             name_prefix=f'rl_buffer_worker_{i}',
             create=True

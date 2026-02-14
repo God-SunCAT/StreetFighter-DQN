@@ -21,7 +21,7 @@ def inference_worker(num_workers):
 
     replay_buffers = [
         SharedReplayBuffer(
-            capacity=100000,
+            capacity=50000,
             obs_shape=(4, 84, 84),
             name_prefix=f'rl_buffer_worker_{i}',
             create=False
