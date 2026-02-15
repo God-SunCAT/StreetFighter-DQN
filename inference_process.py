@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from multiprocessing import shared_memory
 
+from load_net import load_saved_net
 from network import LearningNet
 from replay_buffer import SharedReplayBuffer
 
@@ -9,7 +10,8 @@ def inference_worker(num_workers):
     # 这里其实没必要兼容 cpu, cuda 跑不了的话, 按照 cpu 的速度来说, 也没有跑的必要了
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    net = LearningNet().to(device)
+    # net = LearningNet().to(device)
+    net, _ = load_saved_net()
     for p in net.parameters():
         p.requires_grad_(False)
 
@@ -59,19 +61,8 @@ def inference_worker(num_workers):
                     "inference_weights.pt",
                     map_location="cpu"   # 关键
                 )
-                current_net_state = net.state_dict()
-                current_device = next(net.parameters()).device
-
-                # 软更新 -> 吸收 10% 的新参数作权重混合
-                tau = 0.1 
-                for key in current_net_state:
-                    new_param = new_state_dict[key].to(current_device)
-                    current_net_state[key].copy_(
-                            (1.0 - tau) * current_net_state[key] + tau * new_param
-                    )
                 
-                # copy -> 原地更新 -> 无需 load
-                # net.load_state_dict(current_net_state, strict=True)
+                net.load_state_dict(new_state_dict, strict=True)
                 current_vesion = inference_net_version[()].item()
                 
             with torch.no_grad():

@@ -119,11 +119,9 @@ def env_worker(worker_id, num_workers):
                 reward -= (2 ** (progress - 0.1)) * 0.4 + 0.1
 
             # 4. 强制截断 (DQN 训练的最后一道防线)
-            # 无论前面怎么算，单步奖励绝对不允许超过 [-2, 2]
-            reward = max(min(reward, 2.0), -2.0)
+            # 无论前面怎么算，单步奖励绝对不允许超过 [-1, 1]
+            reward = max(min(reward, 1.0), -1.0)
 
-            # 注意：这里不再需要 reward * 0.1 了，
-            # 因为我们在上面已经手动把数值精确控制在 [-1, 1] 附近的黄金区间。
         
         # 更新记录值供下一帧对比
         current_health = obs_player_hp

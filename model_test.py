@@ -1,13 +1,22 @@
 import math
+import os
 import torch
 import stable_retro
 import cv2
 from collections import deque
 import numpy as np
-import random
+import argparse
 
 from network import LearningNet
 from action_wrapper import SF2Discrete15
+
+# 终端参数
+parser = argparse.ArgumentParser(description='模型测试工具')
+parser.add_argument("--it", type=int, help="测试权重迭代次数")
+parser.add_argument("--vec", action='store_true', help="显示权重")
+parser.add_argument("--reward", action='store_true', help="显示奖励")
+
+args = parser.parse_args()
 
 # 显示配置
 win_name = "Street Fighter II"
@@ -23,8 +32,23 @@ env = stable_retro.make(
 env = SF2Discrete15(env)
 
 # 模型配置
-weights = 'inference_weights.pt'
-# weights = 'checkpoints/model_18000it.pt'
+GREEN = "\033[32m"
+RED = "\033[31m"
+RESET = "\033[0m"
+
+if args.it is None:
+    weights = 'inference_weights.pt'
+    # 绿色加粗输出
+    print(f"{GREEN}[SUCCESS]{RESET} 载入最新权重: {weights}")
+else:
+    weights = f'checkpoints/model_{args.it}it.pt'
+
+    if os.path.exists(weights):
+        print(f"{GREEN}[SUCCESS]{RESET} 载入 {GREEN}{args.it}it{RESET} 权重")
+    else:
+        print(f"{RED}[ERROR]{RESET} {args.it}it 权重文件不存在: {weights}")
+
+# 载入网络
 net = LearningNet()
 net.load_state_dict(torch.load(weights))
 net.to('cuda')
@@ -43,15 +67,16 @@ current_enemy_health = 176
 round_done = False
 
 while not done:
-    if len(state) >= 4:
+    if len(state) >= 4 and not round_done:
         data = np.stack(list(state), axis=0)
         data = torch.tensor(data)
         data = data.unsqueeze(0)
         data = data.float()
         data = data.to('cuda')
         result = net(data)
-        print(result)
         action = int(torch.argmax(result, dim=-1)[0])
+        if args.vec:
+            print(result)
     else:
         # 最初的几步直接无动作
         action = 0
@@ -122,7 +147,7 @@ while not done:
     # if reward != 0:
     #     print(f'Reward: {reward}, Health: {current_health} (Δ {delta_player_hp}), EnemyHealth: {current_enemy_health} (Δ {obs_enemy_hp})')
 
-    if abs(reward) > 0.1:
+    if abs(reward) > 0.1 and args.reward:
         # 定义临时颜色变量
         C_RWD = '\033[92m' if reward > 0 else '\033[91m' # 奖励正绿负红
         C_D_P = '\033[91m' if delta_player_hp > 0 else '' # 自己掉血显红

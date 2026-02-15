@@ -9,6 +9,7 @@ from multiprocessing import shared_memory
 from torch.utils.tensorboard import SummaryWriter
 import copy
 
+from load_net import load_saved_net
 from replay_buffer import SharedReplayBuffer, sample_and_merge
 from network import LearningNet
 
@@ -44,8 +45,8 @@ def train_worker(num_workers):
     # 训练循环 -> 从这里开始, 完全允许自定义
     # 注意迁移网络时候需要设状态
     # 允许 net 直接加载文件中的 checkpoint
-    net = LearningNet().to(device)
-
+    net, it_count = load_saved_net()
+    # net = LearningNet().to(device)
     # 训练后二次启动 加载权重
     # state_dict = torch.load(
     #     "inference_weights.pt",
@@ -75,7 +76,6 @@ def train_worker(num_workers):
         amsgrad=False         # 是否使用 AMSGrad 变体
     )
 
-    it_count = 0
     trans_count = {'infer': 0, 'target': 0}
     
     # 20 个采集, 选4个缓存池, 每个取 48/4 = 12个
@@ -149,8 +149,11 @@ def train_worker(num_workers):
 
         # 目标网络迁移
         if it_count % 3000 == 0:
+            tau = 0.1
             for main_param, target_param in zip(net.parameters(), net_target.parameters()):
-                target_param.copy_(main_param)
+                target_param.data.copy_(
+                    (1.0 - tau) * target_param.data + tau * main_param.data
+                )
             trans_count['target'] += 1
             print(f'迭代次数: {it_count} | 推理迁移次数: {trans_count['infer']} | 目标迁移次数: {trans_count['target']} | 探索概率: {episilon[()].item():.3f}')
             
