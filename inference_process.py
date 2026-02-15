@@ -60,13 +60,18 @@ def inference_worker(num_workers):
                     map_location="cpu"   # 关键
                 )
                 current_net_state = net.state_dict()
+                current_device = next(net.parameters()).device
 
                 # 软更新 -> 吸收 10% 的新参数作权重混合
                 tau = 0.1 
                 for key in current_net_state:
-                    current_net_state[key] = (1.0 - tau) * current_net_state[key] + tau * new_state_dict[key]
+                    new_param = new_state_dict[key].to(current_device)
+                    current_net_state[key].copy_(
+                            (1.0 - tau) * current_net_state[key] + tau * new_param
+                    )
                 
-                net.load_state_dict(current_net_state, strict=True)
+                # copy -> 原地更新 -> 无需 load
+                # net.load_state_dict(current_net_state, strict=True)
                 current_vesion = inference_net_version[()].item()
                 
             with torch.no_grad():
