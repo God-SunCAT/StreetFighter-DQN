@@ -55,11 +55,18 @@ def inference_worker(num_workers):
             
             # 检测版本
             if inference_net_version[()].item() != current_vesion:
-                state_dict = torch.load(
+                new_state_dict = torch.load(
                     "inference_weights.pt",
                     map_location="cpu"   # 关键
                 )
-                net.load_state_dict(state_dict, strict=True)
+                current_net_state = net.state_dict()
+
+                # 软更新 -> 吸收 10% 的新参数作权重混合
+                tau = 0.1 
+                for key in current_net_state:
+                    current_net_state[key] = (1.0 - tau) * current_net_state[key] + tau * new_state_dict[key]
+                
+                net.load_state_dict(current_net_state, strict=True)
                 current_vesion = inference_net_version[()].item()
                 
             with torch.no_grad():

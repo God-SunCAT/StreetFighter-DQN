@@ -24,7 +24,7 @@ env = SF2Discrete15(env)
 
 # 模型配置
 weights = 'inference_weights.pt'
-# weights = 'checkpoints/model_10000it.pt'
+# weights = 'checkpoints/model_18000it.pt'
 net = LearningNet()
 net.load_state_dict(torch.load(weights))
 net.to('cuda')
@@ -50,6 +50,7 @@ while not done:
         data = data.float()
         data = data.to('cuda')
         result = net(data)
+        print(result)
         action = int(torch.argmax(result, dim=-1)[0])
     else:
         # 最初的几步直接无动作
@@ -83,30 +84,40 @@ while not done:
         round_done = True
 
     if not round_done:
+        # 1. 基础引导：大幅降低量级，防止背景惩罚盖过攻击奖励
+        if 0 <= action <= 8:
+            reward -= 0.001  # 只是微小的惩罚，防止原地挂机
+        elif 9 <= action <= 14:
+            reward += 0.01   # 鼓励出招
 
-        if action <= 8 and action >= 0:
-            # 中性动作惩罚
-            reward -= 0.06
-        if action <= 14 and action >= 9:
-            # 攻击动作奖励
-            reward += 0.05
+        # 计算血量进度 (0.0 ~ 1.0)
+        progress = (176 - obs_enemy_hp) / 176
 
+        # 2. 攻击奖励：将底数从 12 降到 2，确保单步奖励不会过载
         if delta_enemy_hp < 0:
-            # 攻击时敌人血量越少, 奖励越大
-            # print('EnemyDelta', delta_enemy_hp)
-            reward += 12 ** ((176 - obs_enemy_hp) / 176) * 3 + 0.5
+            # 打中瞬间：基础奖励 0.3 + 进度加成 (最高 0.6) = 0.9
+            reward += (2 ** progress) * 0.3 + 0.3
 
+        # 3. 受击惩罚：同样限制在 -1 附近
         if delta_player_hp < 0:
-            # 受击时候敌人血量越少, 惩罚越大
-            # print('PlayerDelta', delta_player_hp)
-            reward -= 12 ** (((176 - obs_enemy_hp) / 176) - 0.1) + 1
+            # 被打瞬间：基础惩罚 -0.4 + 进度加成 (最高 -0.4) = -0.8
+            reward -= (2 ** (progress - 0.1)) * 0.4 + 0.1
+
+        # 4. 强制截断 (DQN 训练的最后一道防线)
+        # 无论前面怎么算，单步奖励绝对不允许超过 [-2, 2]
+        reward = max(min(reward, 2.0), -2.0)
+
+        # 注意：这里不再需要 reward * 0.1 了，
+        # 因为我们在上面已经手动把数值精确控制在 [-1, 1] 附近的黄金区间。
     
+    if round_done:
+        # -1 代表角色死亡, 清空 state 重新开始
+        state.clear()
+        old_state = None
+
     # 更新记录值供下一帧对比
     current_health = obs_player_hp
     current_enemy_health = obs_enemy_hp
-
-    # 奖励归一化：将奖励缩放到神经网络易于处理的范围
-    reward = reward * 0.1
 
     # if reward != 0:
     #     print(f'Reward: {reward}, Health: {current_health} (Δ {delta_player_hp}), EnemyHealth: {current_enemy_health} (Δ {obs_enemy_hp})')

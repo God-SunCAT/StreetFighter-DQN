@@ -15,8 +15,8 @@ class LearningNet(nn.Module):
         # 4*84*84 -> 64*7*7
         self.fc1 = nn.Linear(64 * 7 * 7, 512)
         self.fc2 = nn.Linear(512, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, action_size)
+        self.fc3 = nn.Linear(512, 256)
+        self.fc4 = nn.Linear(256, action_size)
 
         self._initialize_weights()
 
@@ -51,5 +51,8 @@ class LearningNet(nn.Module):
         x = F.relu(x)
 
         x = self.fc3(x)
+        x = F.relu(x)
+
+        x = self.fc4(x)
         
         return x

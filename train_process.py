@@ -64,7 +64,7 @@ def train_worker(num_workers):
 
     # EPS_START = 0.844 # 训练后二次启动
 
-    gamma = 0.99
+    gamma = 0.92
     episilon[()] = 1 # 按迭代次数衰减
     optimizer = torch.optim.AdamW(
         net.parameters(), 
@@ -148,7 +148,7 @@ def train_worker(num_workers):
             inference_net_version[()] = trans_count['infer']
 
         # 目标网络迁移
-        if it_count % 5000 == 0:
+        if it_count % 3000 == 0:
             for main_param, target_param in zip(net.parameters(), net_target.parameters()):
                 target_param.copy_(main_param)
             trans_count['target'] += 1
