@@ -61,15 +61,15 @@ def train_worker(num_workers):
     # 训练参数
     EPS_START = 1.0    # 初始探索概率（全乱走）
     EPS_END = 0.05     # 最终探索概率（保留一小部分随机性）
-    EPS_DECAY = 200000 # 衰减率参数
+    EPS_DECAY = 500000 # 衰减率参数
 
     # EPS_START = 0.844 # 训练后二次启动
 
-    gamma = 0.92
+    gamma = 0.99
     episilon[()] = 1 # 按迭代次数衰减
     optimizer = torch.optim.AdamW(
         net.parameters(), 
-        lr=1e-4,              # 学习率
+        lr=2e-5,              # 学习率 (1.3M it前 -> 1e-4 | 1.3M it 后 -> 2e-5)
         betas=(0.9, 0.999),   # 动量参数
         eps=1e-8,             # 防止除以 0 的微小值
         weight_decay=1e-4,    # 权重衰减系数（AdamW 的核心）
@@ -126,7 +126,7 @@ def train_worker(num_workers):
             total_reward += buffer.data['statistic_reward'][()].item()
             total_cnt += buffer.data['statistic_count'][()].item()
 
-        if total_cnt >= 100:
+        if total_cnt >= 1000:
             for buffer in replay_buffers:
                 buffer.data['statistic_time'][()] = 0
                 buffer.data['statistic_reward'][()] = 0
@@ -135,7 +135,7 @@ def train_worker(num_workers):
             writer.add_scalar('Train/time_mean', total_time / total_cnt, it_count)
             writer.add_scalar('Train/reward_mean', total_reward / total_cnt, it_count)
 
-        if len(total_losses) % 100 == 0:
+        if len(total_losses) % 1000 == 0:
             writer.add_scalar('Train/loss', sum(total_losses) / len(total_losses), it_count)
             writer.add_scalar('Train/epsilon', episilon[()], it_count)
             total_losses.clear()
