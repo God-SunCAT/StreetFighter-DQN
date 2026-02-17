@@ -104,36 +104,29 @@ while not done:
         
         round_done = False
 
-    if obs_enemy_hp == -1 or obs_player_hp == -1:
-        # -1 代表角色死亡, 防止二次奖励
-        round_done = True
-
     if not round_done:
-        # 1. 基础引导：大幅降低量级，防止背景惩罚盖过攻击奖励
-        if 0 <= action <= 8:
-            reward -= 0.001  # 只是微小的惩罚，防止原地挂机
-        elif 9 <= action <= 14:
-            reward += 0.01   # 鼓励出招
+        # 不设置动作引导, 全部靠自学以避免骗奖励
+        # 正向奖励倍数
+        positive_coeff = 3.0
+        if obs_player_hp < 0:
+            # Loss
+            reward = -math.pow(176, (obs_enemy_hp + 1) / (176 + 1))
+            round_done = True
+        elif obs_enemy_hp < 0:
+            # Win
+            reward = positive_coeff * math.pow(176, (obs_player_hp + 1) / 176 + 1)
+            round_done = True
+        else:
+            # Fighting
+            reward = positive_coeff * (current_enemy_health - obs_enemy_hp) \
+                - (current_health - obs_player_hp)
+        
+        # 规范化
+        reward = reward * 0.001
 
-        # 计算血量进度 (0.0 ~ 1.0)
-        progress = (176 - obs_enemy_hp) / 176
-
-        # 2. 攻击奖励：将底数从 12 降到 2，确保单步奖励不会过载
-        if delta_enemy_hp < 0:
-            # 打中瞬间：基础奖励 0.3 + 进度加成 (最高 0.6) = 0.9
-            reward += (2 ** progress) * 0.3 + 0.3
-
-        # 3. 受击惩罚：同样限制在 -1 附近
-        if delta_player_hp < 0:
-            # 被打瞬间：基础惩罚 -0.4 + 进度加成 (最高 -0.4) = -0.8
-            reward -= (2 ** (progress - 0.1)) * 0.4 + 0.1
-
-        # 4. 强制截断 (DQN 训练的最后一道防线)
-        # 无论前面怎么算，单步奖励绝对不允许超过 [-2, 2]
-        reward = max(min(reward, 2.0), -2.0)
-
-        # 注意：这里不再需要 reward * 0.1 了，
-        # 因为我们在上面已经手动把数值精确控制在 [-1, 1] 附近的黄金区间。
+        # 强制截断 (DQN 训练的最后一道防线)
+        # 无论前面怎么算，单步奖励绝对不允许超过 [-1, 1]
+        reward = max(min(reward, 1.0), -1.0)
     
     if round_done:
         # -1 代表角色死亡, 清空 state 重新开始
@@ -147,7 +140,7 @@ while not done:
     # if reward != 0:
     #     print(f'Reward: {reward}, Health: {current_health} (Δ {delta_player_hp}), EnemyHealth: {current_enemy_health} (Δ {obs_enemy_hp})')
 
-    if abs(reward) > 0.1 and args.reward:
+    if reward != 0 and args.reward:
         # 定义临时颜色变量
         C_RWD = '\033[92m' if reward > 0 else '\033[91m' # 奖励正绿负红
         C_D_P = '\033[91m' if delta_player_hp > 0 else '' # 自己掉血显红
@@ -176,6 +169,7 @@ while not done:
     cv2.imshow("Street Fighter II", frame)
     # 必须要给 cv2 留出刷新时间，否则会白屏
     cv2.waitKey(5)
+
 
 print(f'\033[1;44;37m Total Reward: {total_reward:.2f} \033[0m')
 

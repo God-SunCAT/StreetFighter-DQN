@@ -2,7 +2,7 @@ import torch
 from network import LearningNet
 def load_saved_net(device='cuda') -> tuple[LearningNet, int]:
     saved_it = 0
-    weight_path = ''
+    weight_path = './checkpoints/model_829471it.pt'
 
     net: LearningNet = LearningNet().to(device)
     if saved_it:

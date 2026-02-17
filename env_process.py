@@ -86,39 +86,34 @@ def env_worker(worker_id, num_workers):
         obs_enemy_hp = info.get('enemy_health', 0)
         obs_player_hp = info.get('health', 0)
 
-        delta_enemy_hp = obs_enemy_hp - current_enemy_health
-        delta_player_hp = obs_player_hp - current_health
-
         if obs_enemy_hp == 176 and obs_player_hp == 176:
             round_done = False
 
-        if obs_enemy_hp == -1 or obs_player_hp == -1:
-            # -1 代表角色死亡, 防止二次奖励
-            round_done = True
-
         # 双子星老师, 您发发力吧 /哭
         # 我自己都改了一天奖励机制了, 现在只能靠您了/呜呜呜
+        # 双子星老师, 您太不给力了, 只能自己上了.
         if not round_done:
-            # 1. 基础引导：大幅降低量级，防止背景惩罚盖过攻击奖励
-            if 0 <= action <= 8:
-                reward -= 0.001  # 只是微小的惩罚，防止原地挂机
-            elif 9 <= action <= 14:
-                reward += 0.01   # 鼓励出招
+            # 不设置动作引导, 全部靠自学以避免骗奖励
+            # 这里有个坑就是, 战败血量不会经过0而是直接 -1
+            # 正向奖励倍数
+            positive_coeff = 3.0
+            if obs_player_hp < 0:
+                # Loss
+                reward = -math.pow(176, (obs_enemy_hp + 1) / (176 + 1))
+                round_done = True
+            elif obs_enemy_hp < 0:
+                # Win
+                reward = positive_coeff * math.pow(176, (obs_player_hp + 1) / 176 + 1)
+                round_done = True
+            else:
+                # Fighting
+                reward = positive_coeff * (current_enemy_health - obs_enemy_hp) \
+                    - (current_health - obs_player_hp)
+            
+            # 规范化
+            reward = reward * 0.001
 
-            # 计算血量进度 (0.0 ~ 1.0)
-            progress = (176 - obs_enemy_hp) / 176
-
-            # 2. 攻击奖励：将底数从 12 降到 2，确保单步奖励不会过载
-            if delta_enemy_hp < 0:
-                # 打中瞬间：基础奖励 0.3 + 进度加成 (最高 0.6) = 0.9
-                reward += (2 ** progress) * 0.3 + 0.3
-
-            # 3. 受击惩罚：同样限制在 -1 附近
-            if delta_player_hp < 0:
-                # 被打瞬间：基础惩罚 -0.4 + 进度加成 (最高 -0.4) = -0.8
-                reward -= (2 ** (progress - 0.1)) * 0.4 + 0.1
-
-            # 4. 强制截断 (DQN 训练的最后一道防线)
+            # 强制截断 (DQN 训练的最后一道防线)
             # 无论前面怎么算，单步奖励绝对不允许超过 [-1, 1]
             reward = max(min(reward, 1.0), -1.0)
 

@@ -61,19 +61,27 @@ def train_worker(num_workers):
     # 训练参数
     EPS_START = 1.0    # 初始探索概率（全乱走）
     EPS_END = 0.05     # 最终探索概率（保留一小部分随机性）
-    EPS_DECAY = 500000 # 衰减率参数
+    EPS_DECAY = 200000 # 衰减率参数
 
     # EPS_START = 0.844 # 训练后二次启动
 
-    gamma = 0.99
+    gamma = 0.97
     episilon[()] = 1 # 按迭代次数衰减
     optimizer = torch.optim.AdamW(
         net.parameters(), 
-        lr=2e-5,              # 学习率 (1.3M it前 -> 1e-4 | 1.3M it 后 -> 2e-5)
+        lr=2e-5,              # 学习率
         betas=(0.9, 0.999),   # 动量参数
         eps=1e-8,             # 防止除以 0 的微小值
         weight_decay=1e-4,    # 权重衰减系数（AdamW 的核心）
         amsgrad=False         # 是否使用 AMSGrad 变体
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 
+        mode='min', 
+        factor=0.2, 
+        patience=20,      # 容忍 20 次“1000it”不下降
+        threshold=1e-6,   # 只有变化大于这个值才算有进步
+        min_lr=1e-9
     )
 
     trans_count = {'infer': 0, 'target': 0}
@@ -136,7 +144,11 @@ def train_worker(num_workers):
             writer.add_scalar('Train/reward_mean', total_reward / total_cnt, it_count)
 
         if len(total_losses) % 1000 == 0:
-            writer.add_scalar('Train/loss', sum(total_losses) / len(total_losses), it_count)
+            avg_loss = sum(total_losses) / len(total_losses)
+            scheduler.step(avg_loss)
+
+            writer.add_scalar('Train/lr', optimizer.param_groups[0]['lr'], it_count)
+            writer.add_scalar('Train/loss', avg_loss, it_count)
             writer.add_scalar('Train/epsilon', episilon[()], it_count)
             total_losses.clear()
 
