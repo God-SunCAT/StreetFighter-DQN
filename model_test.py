@@ -66,24 +66,41 @@ current_health = 176
 current_enemy_health = 176
 round_done = False
 
-while not done:
-    if len(state) >= 4 and not round_done:
-        data = np.stack(list(state), axis=0)
-        data = torch.tensor(data)
-        data = data.unsqueeze(0)
-        data = data.float()
-        data = data.to('cuda')
-        result = net(data)
-        action = int(torch.argmax(result, dim=-1)[0])
-        if args.vec:
-            print(result)
-    else:
-        # 最初的几步直接无动作
-        action = 0
+frame_skip_count = 0
+frame_skip_action = 0
 
-    # action = env.action_space.sample()
+tmp_reward = 0
+
+while not done:
+    # 帧跳过
+    skip: bool = frame_skip_count < 6
+    if frame_skip_count < 6:
+        if round_done:
+            # Round Done 阶段跳过加载靠设 count = 0
+            frame_skip_action = 0
+
+        next_frame, _, terminated, truncated, info = env.step(frame_skip_action)
+        frame_skip_count += 1
+    else:
+        if len(state) >= 4 and not round_done:
+            data = np.stack(list(state), axis=0)
+            data = torch.tensor(data)
+            data = data.unsqueeze(0)
+            data = data.float()
+            data = data.to('cuda')
+            result = net(data)
+            action = int(torch.argmax(result, dim=-1)[0])
+            if args.vec:
+                print(result)
+        else:
+            # 最初的几步直接无动作
+            action = 0
+
+        frame_skip_count = 1
+        frame_skip_action = action
+
+        next_frame, _, terminated, truncated, info = env.step(action)
     
-    next_frame, game_reward, terminated, truncated, info = env.step(action)
     done = terminated or truncated
     
     # ================
@@ -100,6 +117,7 @@ while not done:
     if obs_enemy_hp == 176 or obs_player_hp == 176:
         if round_done and delta_enemy_hp != 0 and delta_player_hp != 0:
             # 青色 加粗
+            tmp_reward = 0
             print('\033[1;36m' + '---- Next Round ----' + '\033[0m')
         
         round_done = False
@@ -120,6 +138,8 @@ while not done:
             # Fighting
             reward = positive_coeff * (current_enemy_health - obs_enemy_hp) \
                 - (current_health - obs_player_hp)
+            if reward != 0:
+                pass
         
         # 规范化
         reward = reward * 0.001
@@ -128,40 +148,50 @@ while not done:
         # 无论前面怎么算，单步奖励绝对不允许超过 [-1, 1]
         reward = max(min(reward, 1.0), -1.0)
     
-    if round_done:
-        # -1 代表角色死亡, 清空 state 重新开始
-        state.clear()
-        old_state = None
 
     # 更新记录值供下一帧对比
     current_health = obs_player_hp
     current_enemy_health = obs_enemy_hp
 
+    tmp_reward += reward
     # if reward != 0:
     #     print(f'Reward: {reward}, Health: {current_health} (Δ {delta_player_hp}), EnemyHealth: {current_enemy_health} (Δ {obs_enemy_hp})')
 
-    if reward != 0 and args.reward:
-        # 定义临时颜色变量
-        C_RWD = '\033[92m' if reward > 0 else '\033[91m' # 奖励正绿负红
-        C_D_P = '\033[91m' if delta_player_hp > 0 else '' # 自己掉血显红
-        C_D_E = '\033[92m' if delta_enemy_hp > 0 else '' # 敌人掉血显绿
-        C_NUM = '\033[93m' # 数值亮黄
-        C_END = '\033[0m'
-
-        print(f'{C_RWD}Reward: {reward:.4f}{C_END}, '
-            f'Health: {C_NUM}{current_health}{C_END} ({C_D_P}Δ {delta_player_hp}{C_END}), '
-            f'EnemyHealth: {C_NUM}{current_enemy_health}{C_END} ({C_D_E}Δ {delta_enemy_hp}{C_END})')
-        
     # ================
     # ---- REWARD ----
     # ================
     
     total_reward += reward
     
-    # 压入状态
-    gray_frame = cv2.cvtColor(next_frame, cv2.COLOR_BGR2GRAY)
-    gray_frame = cv2.resize(gray_frame, (84, 84))
-    state.append(gray_frame)
+    if not skip or round_done:
+        # 输出reward
+        if tmp_reward != 0 and args.reward:
+            # 定义临时颜色变量
+            C_RWD = '\033[92m' if reward > 0 else '\033[91m' # 奖励正绿负红
+            C_D_P = '\033[91m' if delta_player_hp > 0 else '' # 自己掉血显红
+            C_D_E = '\033[92m' if delta_enemy_hp > 0 else '' # 敌人掉血显绿
+            C_NUM = '\033[93m' # 数值亮黄
+            C_END = '\033[0m'
+
+            print(f'{C_RWD}Reward: {tmp_reward:.4f}{C_END}, '
+                f'Health: {C_NUM}{current_health}{C_END} ({C_D_P}Δ {delta_player_hp}{C_END}), '
+                f'EnemyHealth: {C_NUM}{current_enemy_health}{C_END} ({C_D_E}Δ {delta_enemy_hp}{C_END})')
+            
+    if not skip:
+        # 压入状态
+        gray_frame = cv2.cvtColor(next_frame, cv2.COLOR_BGR2GRAY)
+        gray_frame = cv2.resize(gray_frame, (84, 84))
+        state.append(gray_frame)
+
+        tmp_reward = 0
+        
+    if round_done:
+        # -1 代表角色死亡, 清空 state 重新开始
+        state.clear()
+        old_state = None
+
+        tmp_reward = 0
+        frame_skip_count = 0
 
     # 显示
     frame = cv2.cvtColor(next_frame, cv2.COLOR_RGB2BGR)

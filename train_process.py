@@ -61,11 +61,11 @@ def train_worker(num_workers):
     # 训练参数
     EPS_START = 1.0    # 初始探索概率（全乱走）
     EPS_END = 0.05     # 最终探索概率（保留一小部分随机性）
-    EPS_DECAY = 200000 # 衰减率参数
+    EPS_DECAY = 1000000 # 衰减率参数
 
     # EPS_START = 0.844 # 训练后二次启动
 
-    gamma = 0.97
+    gamma = 0.94
     episilon[()] = 1 # 按迭代次数衰减
     optimizer = torch.optim.AdamW(
         net.parameters(), 
@@ -153,8 +153,8 @@ def train_worker(num_workers):
             total_losses.clear()
 
         # 推理网络迁移
-        if it_count % 50 == 0:
-            # 我真没招了, 直接掉文件系统做跨进程权重同步吧
+        if it_count % 70 == 0:
+            # 我真没招了, 直接调文件系统做跨进程权重同步吧
             torch.save(net.state_dict(), "inference_weights.pt")
             trans_count['infer'] += 1
             inference_net_version[()] = trans_count['infer']
