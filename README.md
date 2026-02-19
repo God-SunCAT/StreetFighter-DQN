@@ -66,7 +66,7 @@ python model_test.py --it 500 --vec --reward
 ![Loss](assets/train_loss.png)
 ![Reward](assets/train_reward.png)
 ---
-<video controls src="assets/show_400000it.mp4" title="Title"></video>
+<video controls src="https://github.com/God-SunCAT/StreetFighter-DQN/blob/main/assets/show_400000it.mp4?raw=true" title="第40万次迭代"></video>
 ---
 #### PS: 当初设计网络的时候复杂度做少了, 模型跑到最后也只到了能把敌人打残血的地步(40k it). 不过也有可能是随机探索概率太高造成的问题, 到了40W步平稳期开始的时候随机探索概率依旧很高(虽然知道问题, 但现在就可以了, 实在没精力重新训了).
 ---
