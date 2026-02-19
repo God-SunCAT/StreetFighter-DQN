@@ -48,6 +48,8 @@ else:
     else:
         print(f"{RED}[ERROR]{RESET} {args.it}it 权重文件不存在: {weights}")
 
+# weights = 'checkpoints/model_400000it.pt'
+
 # 载入网络
 net = LearningNet()
 net.load_state_dict(torch.load(weights))
@@ -113,7 +115,7 @@ while not done:
     frame = cv2.resize(frame, (640, 480))
     cv2.imshow("Street Fighter II", frame)
     # 必须要给 cv2 留出刷新时间，否则会白屏
-    cv2.waitKey(5)
+    cv2.waitKey(5) 
 
     # ================
     # ---- REWARD ----
